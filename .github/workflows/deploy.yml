@@ -12,14 +12,29 @@ jobs:
         uses: actions/checkout@v4
 
       - name: AWS EC2 ga deploy qilish
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
           script: |
+            set -e
+
+            # 1. Repo'dan yangi kodlarni olish
             cd /var/www/networking
-            git pull origin main
+            git fetch --all --prune
+            git reset --hard origin/main
+
+            # 2. Frontend papkasiga o'tib build qilish
+            cd /var/www/networking/Kiyim-Kechal-Frontend-main
             npm ci
             npm run build
-            pm2 restart networking || pm2 start npm --name "networking" -- start
+
+            # 3. PM2 orqali yangi build'ni serve qilish
+            pm2 delete networking 2>/dev/null || true
+            pm2 serve /var/www/networking/Kiyim-Kechal-Frontend-main/dist 3000 --spa --name "networking"
+            pm2 save
+
+            echo "==> Deploy muvaffaqiyatli tugadi!"
